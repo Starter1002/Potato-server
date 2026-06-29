@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>PATATA CALIENTE</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Oswald:wght@700&display=swap');
+
+  * { margin:0; padding:0; box-sizing:border-box; touch-action:none; }
+
+  :root {
+    --bg:#0a0a0f; --red:#ff3d3d; --orange:#ffae00;
+    --cyan:#00e5ff; --purple:#a020f0; --yellow:#ffd700;
+    --white:#eeeef0; --gray:#333344;
+    --mono:'Share Tech Mono',monospace; --display:'Oswald',sans-serif;
+  }
+
+  body { background:var(--bg); color:var(--white); font-family:var(--mono);
+    overflow:hidden; width:100vw; height:100vh;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; }
+
+  .screen { display:none; width:100%; height:100%; flex-direction:column; align-items:center; justify-content:center; }
+  .screen.active { display:flex; }
+
+  #screen-menu, #screen-lobby, #screen-result {
+    background:radial-gradient(ellipse at center,#180a08 0%,#050508 100%);
+    position:relative; overflow:hidden;
+  }
+  #screen-menu::before, #screen-lobby::before, #screen-result::before {
+    content:''; position:absolute; inset:0;
+    background-image:linear-gradient(rgba(255,61,61,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,61,61,.04) 1px,transparent 1px);
+    background-size:32px 32px; animation:gridScroll 8s linear infinite;
+  }
+  @keyframes gridScroll { from{background-position:0 0} to{background-position:32px 32px} }
+
+  .menu-content { position:relative; z-index:1; text-align:center; width:90%; max-width:420px; }
+  .game-logo { font-family:var(--display); font-size:clamp(2.2rem,10vw,3.6rem); letter-spacing:.1em;
+    color:var(--white); line-height:1; text-shadow:0 0 40px rgba(255,61,61,.5),0 0 80px rgba(255,174,0,.2); }
+  .game-logo span { color:var(--red); }
+  .logo-sub { font-size:.62rem; letter-spacing:.35em; color:rgba(255,174,0,.7); margin-top:8px; text-transform:uppercase; }
+  .menu-divider { width:60px; height:2px; background:linear-gradient(90deg,transparent,var(--red),transparent); margin:22px auto; }
+  .menu-section-title { font-size:.6rem; letter-spacing:.3em; color:rgba(255,255,255,.4); text-transform:uppercase; margin-bottom:12px; }
+
+  .card { border:1px solid var(--gray); background:rgba(255,255,255,.03); padding:14px 16px; margin-bottom:14px; text-align:left; }
+
+  .field-label { font-size:.55rem; letter-spacing:.2em; color:rgba(255,255,255,.4); text-transform:uppercase; display:block; margin-bottom:6px; }
+  .mp-input { width:100%; padding:13px; background:rgba(255,255,255,.04); border:1px solid var(--gray);
+    color:var(--white); font-family:var(--mono); font-size:.9rem; outline:none; transition:.2s; text-align:center; letter-spacing:.1em; }
+  .mp-input:focus { border-color:var(--red); box-shadow:0 0 10px rgba(255,61,61,.3); }
+  .mp-input::placeholder { color:rgba(255,255,255,.3); }
+
+  .btn-main { width:100%; padding:15px; background:var(--red); color:#0a0a0f; border:none;
+    font-family:var(--display); font-size:1rem; letter-spacing:.18em; cursor:pointer; transition:all .15s;
+    clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px)); }
+  .btn-main:disabled { background:#333; color:#666; cursor:not-allowed; }
+  .btn-main:not(:disabled):active { transform:scale(.97); }
+  .btn-secondary { width:100%; padding:13px; background:transparent; border:2px solid var(--orange); color:var(--orange);
+    font-family:var(--display); font-size:.9rem; letter-spacing:.18em; cursor:pointer; margin-top:10px; }
+  .btn-secondary:active { background:rgba(255,174,0,.12); }
+
+  .status-msg { font-size:.65rem; color:var(--red); text-align:center; margin-top:8px; min-height:14px; letter-spacing:.05em; }
+
+  .room-code-display { font-family:var(--display); font-size:2.2rem; letter-spacing:.25em; color:var(--orange);
+    text-shadow:0 0 20px rgba(255,174,0,.4); text-align:center; }
+  .room-code-hint { font-size:.55rem; color:rgba(255,255,255,.4); text-align:center; letter-spacing:.1em; margin-top:4px; }
+
+  .player-slot { display:flex; align-items:center; gap:10px; padding:9px 12px; border:1px solid var(--gray);
+    background:rgba(255,255,255,.02); margin-bottom:6px; }
+  .player-slot.empty { opacity:.35; }
+  .player-dot { width:14px; height:14px; border-radius:50%; flex-shrink:0; box-shadow:0 0 8px currentColor; }
+  .player-slot-name { font-size:.8rem; letter-spacing:.05em; flex:1; }
+  .host-tag { font-size:.5rem; letter-spacing:.15em; color:var(--orange); border:1px solid var(--orange); padding:2px 5px; }
+
+  /* ---- GAME SCREEN ---- */
+  #screen-game { position:relative; flex-direction:column; background:var(--bg); }
+
+  #hud { position:absolute; top:0; left:0; right:0; height:60px; background:rgba(10,10,15,.92);
+    border-bottom:1px solid #1a1a2a; display:flex; align-items:center; justify-content:center;
+    padding:0 14px; z-index:10; }
+  #bomb-banner { font-family:var(--display); font-size:1rem; letter-spacing:.1em; text-align:center; }
+  #bomb-banner.mine { color:var(--red); animation:bombPulse .5s ease infinite; }
+  #bomb-banner.others { color:rgba(255,255,255,.55); font-size:.75rem; letter-spacing:.05em; }
+  @keyframes bombPulse { 0%,100%{ text-shadow:0 0 10px rgba(255,61,61,.6); } 50%{ text-shadow:0 0 25px rgba(255,61,61,1); } }
+
+  #status-badge { position:absolute; top:66px; right:10px; z-index:10; font-size:.65rem; letter-spacing:.1em;
+    padding:6px 10px; border:1px solid; display:none; align-items:center; gap:6px; background:rgba(10,10,15,.85); }
+  #status-badge.show { display:flex; }
+  #status-badge.dash { color:var(--yellow); border-color:var(--yellow); }
+  #status-badge.protection { color:var(--cyan); border-color:var(--cyan); }
+  #status-badge.invisibility { color:var(--purple); border-color:var(--purple); }
+
+  canvas { display:block; position:absolute; top:60px; left:0; right:0; bottom:120px; background:#0a0a0f; }
+
+  #controls { position:absolute; bottom:0; left:0; right:0; height:120px;
+    background:rgba(10,10,15,.95); border-top:1px solid #1a1a2a;
+    display:flex; align-items:center; justify-content:center; z-index:10; }
+  #joystick-base { width:90px; height:90px; border-radius:50%; border:2px solid #2a2a3a;
+    background:rgba(255,61,61,.05); position:relative; display:flex; align-items:center; justify-content:center; }
+  #joystick-thumb { width:38px; height:38px; border-radius:50%;
+    background:radial-gradient(circle at 40% 35%,#ff7a7a,#7a1d1d);
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    box-shadow:0 0 12px rgba(255,61,61,.5); }
+
+  /* ---- RESULT ---- */
+  .result-title { font-family:var(--display); font-size:clamp(2.4rem,11vw,3.8rem); letter-spacing:.1em; margin-bottom:18px; }
+  .result-list { width:100%; max-width:300px; display:flex; flex-direction:column; gap:6px; margin-bottom:22px; }
+  .result-row { display:flex; justify-content:space-between; padding:8px 12px; border:1px solid var(--gray); font-size:.78rem; }
+  .result-row.loser { border-color:var(--red); color:var(--red); }
+  .result-row.winner { border-color:#3a3; color:#5f5; }
+</style>
+</head>
+<body>
+
+<!-- MENU -->
+<div id="screen-menu" class="screen active">
+  <div class="menu-content">
+    <div class="game-logo">PATATA<span> CALIENTE</span></div>
+    <div class="logo-sub">Modo Multijugador · hasta 4 jugadores</div>
+    <div class="menu-divider"></div>
+
+    <div class="card">
+      <span class="field-label">Tu nombre</span>
+      <input id="nameInput" class="mp-input" type="text" maxlength="12" placeholder="Jugador">
+    </div>
+
+    <button class="btn-main" id="btn-create" onclick="onCreateRoom()">CREAR SALA</button>
+
+    <div class="menu-divider"></div>
+
+    <div class="card">
+      <span class="field-label">Código de sala</span>
+      <input id="joinCodeInput" class="mp-input" type="text" maxlength="5" placeholder="EJ: AB123">
+    </div>
+    <button class="btn-secondary" id="btn-join" onclick="onJoinRoom()">UNIRSE</button>
+
+    <div class="status-msg" id="menu-status"></div>
+  </div>
+</div>
+
+<!-- LOBBY -->
+<div id="screen-lobby" class="screen">
+  <div class="menu-content">
+    <div class="game-logo" style="font-size:1.8rem;">SALA</div>
+    <div class="room-code-display" id="lobbyRoomCode">-----</div>
+    <div class="room-code-hint">Comparte este código con tus amigos</div>
+    <button class="btn-secondary" style="margin-top:10px;" onclick="copyRoomCode()">COPIAR CÓDIGO</button>
+
+    <div class="menu-divider"></div>
+    <div class="menu-section-title">Jugadores (<span id="playerCountText">0/4</span>)</div>
+    <div id="lobbyPlayerList"></div>
+
+    <div class="menu-divider"></div>
+    <button class="btn-main" id="btn-start-game" onclick="onStartGame()">EMPEZAR</button>
+    <div class="status-msg" id="lobby-status"></div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="screen-game" class="screen">
+  <div id="hud">
+    <div id="bomb-banner">Conectando...</div>
+  </div>
+  <div id="status-badge"></div>
+  <canvas id="gameCanvas"></canvas>
+  <div id="controls">
+    <div id="joystick-base">
+      <div id="joystick-thumb"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULT -->
+<div id="screen-result" class="screen">
+  <div class="menu-content">
+    <div class="result-title" id="resultTitle">—</div>
+    <div class="result-list" id="resultList"></div>
+    <button class="btn-main" onclick="onBackToLobby()">VOLVER AL LOBBY</button>
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+// ==============================================
+//  PATATA CALIENTE — Cliente
+// ==============================================
+
+// ⚠️ Reemplaza esta URL por la de tu servicio en Render una vez desplegado el servidor.
+const SERVER_URL = 'https://TU-SERVIDOR-RENDER.onrender.com';
+
+const POWERUP_ICON  = { dash:'⚡', protection:'🛡', invisibility:'👻' };
+const POWERUP_NAME  = { dash:'DASH', protection:'PROTECCIÓN', invisibility:'INVISIBILIDAD' };
+const POWERUP_COLOR = { dash:'#ffd700', protection:'#00e5ff', invisibility:'#a020f0' };
+
+const BASE_SPEED  = 190; // px lógicos / segundo
+const DASH_MULT   = 1.05;
+const PLAYER_R    = 18;
+
+let socket = null;
+let myId = null;
+let roomCode = null;
+let hostId = null;
+let myName = 'Jugador';
+
+let players = {};       // estado conocido por id (incluye self)
+let renderPos = {};      // posiciones interpoladas para jugadores remotos
+let powerups = {};       // power-ups en el suelo, por id
+
+let arenaW = 800, arenaH = 600;
+let localPos = { x: 400, y: 300 };
+let moveDir = { x: 0, y: 0 };
+let bombHolderId = null;
+let bombTimeLeft = 15;
+
+let animFrame = null;
+let lastFrameTime = 0;
+let lastSendTime = 0;
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// ==============================================
+// CONEXIÓN
+// ==============================================
+window.addEventListener('load', () => {
+  if (typeof io === 'undefined') {
+    document.getElementById('menu-status').textContent = 'No se pudo cargar Socket.IO.';
+    return;
+  }
+  socket = io(SERVER_URL);
+
+  socket.on('connect', () => console.log('Conectado al servidor'));
+  socket.on('connect_error', () => {
+    document.getElementById('menu-status').textContent = 'No se pudo conectar al servidor.';
+  });
+
+  socket.on('joinError', ({ message }) => {
+    document.getElementById('menu-status').textContent = message;
+  });
+
+  socket.on('roomCreated', onRoomEntered);
+  socket.on('roomJoined', onRoomEntered);
+
+  socket.on('playersUpdate', ({ players: list, hostId: hid }) => {
+    hostId = hid;
+    indexPlayers(list);
+    renderLobby();
+  });
+
+  socket.on('gameStarted', ({ players: list, bombHolder, arenaW: aw, arenaH: ah }) => {
+    arenaW = aw; arenaH = ah;
+    indexPlayers(list);
+    bombHolderId = bombHolder;
+    bombTimeLeft = 15;
+    powerups = {};
+    if (players[myId]) localPos = { x: players[myId].x, y: players[myId].y };
+    renderPos = {};
+    showScreen('screen-game');
+    resizeCanvas();
+    startGameLoop();
+  });
+
+  socket.on('stateUpdate', ({ players: list, bombTimeLeft: bt, powerups: pulist }) => {
+    indexPlayers(list);
+    const holder = list.find(p => p.hasBomb);
+    bombHolderId = holder ? holder.id : null;
+    bombTimeLeft = bt;
+    powerups = {};
+    pulist.forEach(pu => { powerups[pu.id] = pu; });
+  });
+
+  socket.on('powerupSpawned', pu => { powerups[pu.id] = pu; });
+  socket.on('powerupDespawned', ({ id }) => { delete powerups[id]; });
+  socket.on('bombPassed', ({ newHolderId }) => { bombHolderId = newHolderId; });
+
+  socket.on('gameOver', ({ loserId, winners }) => {
+    stopGameLoop();
+    showResult(loserId, winners);
+  });
+
+  socket.on('playersUpdate', () => {}); // ya manejado arriba
+});
+
+function onRoomEntered(data) {
+  myId = data.you;
+  roomCode = data.roomCode;
+  hostId = data.hostId;
+  indexPlayers(data.players);
+  document.getElementById('lobbyRoomCode').textContent = roomCode;
+  showScreen('screen-lobby');
+  renderLobby();
+}
+
+function indexPlayers(list) {
+  const fresh = {};
+  list.forEach(p => { fresh[p.id] = p; });
+  players = fresh;
+}
+
+// ==============================================
+// MENU
+// ==============================================
+function onCreateRoom() {
+  if (!socket) return;
+  myName = document.getElementById('nameInput').value.trim() || 'Jugador';
+  document.getElementById('menu-status').textContent = '';
+  socket.emit('createRoom', { name: myName });
+}
+
+function onJoinRoom() {
+  if (!socket) return;
+  myName = document.getElementById('nameInput').value.trim() || 'Jugador';
+  const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+  if (!code) { document.getElementById('menu-status').textContent = 'Escribe un código de sala.'; return; }
+  document.getElementById('menu-status').textContent = '';
+  socket.emit('joinRoom', { name: myName, roomCode: code });
+}
+
+// ==============================================
+// LOBBY
+// ==============================================
+function renderLobby() {
+  const list = Object.values(players);
+  document.getElementById('playerCountText').textContent = `${list.length}/4`;
+
+  const wrap = document.getElementById('lobbyPlayerList');
+  wrap.innerHTML = '';
+  for (let i = 0; i < 4; i++) {
+    const p = list[i];
+    const row = document.createElement('div');
+    if (p) {
+      row.className = 'player-slot';
+      row.innerHTML = `
+        <div class="player-dot" style="background:${p.color};color:${p.color}"></div>
+        <div class="player-slot-name">${escapeHtml(p.name)}${p.id === myId ? ' (tú)' : ''}</div>
+        ${p.id === hostId ? '<div class="host-tag">HOST</div>' : ''}
+      `;
+    } else {
+      row.className = 'player-slot empty';
+      row.innerHTML = `<div class="player-dot" style="background:#444;color:#444"></div><div class="player-slot-name">Esperando jugador...</div>`;
+    }
+    wrap.appendChild(row);
+  }
+
+  const isHost = hostId === myId;
+  const startBtn = document.getElementById('btn-start-game');
+  startBtn.style.display = isHost ? 'block' : 'none';
+  startBtn.disabled = list.length < 2;
+  document.getElementById('lobby-status').textContent =
+    isHost ? (list.length < 2 ? 'Esperando al menos 2 jugadores...' : '')
+           : 'Esperando a que el host inicie la partida...';
+}
+
+function onStartGame() {
+  if (!socket) return;
+  socket.emit('startGame');
+}
+
+function copyRoomCode() {
+  if (!roomCode) return;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(roomCode).catch(() => {});
+  }
+  const status = document.getElementById('lobby-status');
+  const prev = status.textContent;
+  status.textContent = 'Código copiado: ' + roomCode;
+  setTimeout(() => { status.textContent = prev; }, 1500);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+// ==============================================
+// CANVAS
+// ==============================================
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = Math.max(100, window.innerHeight - 60 - 120);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function getTransform() {
+  const scale = Math.min(canvas.width / arenaW, canvas.height / arenaH);
+  const offsetX = (canvas.width - arenaW * scale) / 2;
+  const offsetY = (canvas.height - arenaH * scale) / 2;
+  return { scale, offsetX, offsetY };
+}
+
+// ==============================================
+// GAME LOOP
+// ==============================================
+function startGameLoop() {
+  lastFrameTime = performance.now();
+  lastSendTime = 0;
+  gameLoop();
+}
+function stopGameLoop() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  animFrame = null;
+}
+
+function gameLoop() {
+  animFrame = requestAnimationFrame(gameLoop);
+  const now = performance.now();
+  const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+  lastFrameTime = now;
+
+  updateLocalMovement(dt);
+  interpolateOthers();
+  maybeSendPosition(now);
+  updateHUD();
+  draw();
+}
+
+function updateLocalMovement(dt) {
+  const len = Math.hypot(moveDir.x, moveDir.y);
+  if (len < 0.05) return;
+  const nx = moveDir.x / len, ny = moveDir.y / len;
+
+  const me = players[myId];
+  let speed = BASE_SPEED;
+  if (me && me.powerUp === 'dash' && Date.now() < me.powerUpExpiresAt) speed *= DASH_MULT;
+
+  localPos.x = Math.max(PLAYER_R, Math.min(arenaW - PLAYER_R, localPos.x + nx * speed * dt));
+  localPos.y = Math.max(PLAYER_R, Math.min(arenaH - PLAYER_R, localPos.y + ny * speed * dt));
+}
+
+function interpolateOthers() {
+  for (const id in players) {
+    if (id === myId) continue;
+    const p = players[id];
+    if (!renderPos[id]) renderPos[id] = { x: p.x, y: p.y };
+    renderPos[id].x += (p.x - renderPos[id].x) * 0.25;
+    renderPos[id].y += (p.y - renderPos[id].y) * 0.25;
+  }
+}
+
+function maybeSendPosition(now) {
+  if (now - lastSendTime < 80) return;
+  lastSendTime = now;
+  if (socket) socket.emit('move', { x: localPos.x, y: localPos.y });
+}
+
+// ==============================================
+// HUD
+// ==============================================
+function updateHUD() {
+  const banner = document.getElementById('bomb-banner');
+  if (bombHolderId === myId) {
+    banner.className = 'mine';
+    banner.textContent = `💣 ¡TIENES LA BOMBA! ${Math.ceil(bombTimeLeft)}s`;
+  } else {
+    banner.className = 'others';
+    const holder = players[bombHolderId];
+    const holderVisible = holder && !(holder.invisibleUntil && Date.now() < holder.invisibleUntil);
+    banner.textContent = holderVisible ? `💣 ${holder.name} tiene la bomba` : '💣 ¿Quién tiene la bomba?';
+  }
+
+  const badge = document.getElementById('status-badge');
+  const me = players[myId];
+  if (me && me.powerUp && Date.now() < me.powerUpExpiresAt) {
+    const secs = Math.ceil((me.powerUpExpiresAt - Date.now()) / 1000);
+    badge.className = 'show ' + me.powerUp;
+    badge.textContent = `${POWERUP_ICON[me.powerUp]} ${POWERUP_NAME[me.powerUp]} ${secs}s`;
+  } else {
+    badge.className = '';
+  }
+}
+
+// ==============================================
+// DRAW
+// ==============================================
+function draw() {
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const { scale, offsetX, offsetY } = getTransform();
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(scale, scale);
+
+  // suelo de la arena
+  ctx.fillStyle = '#0f0f18';
+  ctx.fillRect(0, 0, arenaW, arenaH);
+  ctx.strokeStyle = 'rgba(255,61,61,0.06)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < arenaW; x += 40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,arenaH); ctx.stroke(); }
+  for (let y = 0; y < arenaH; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(arenaW,y); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(255,61,61,0.25)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(0, 0, arenaW, arenaH);
+
+  // power-ups en el suelo
+  const now = Date.now();
+  for (const id in powerups) {
+    const pu = powerups[id];
+    const blink = Math.sin(now / 120) > -0.3;
+    if (!blink) continue;
+    ctx.beginPath();
+    ctx.arc(pu.x, pu.y, 14, 0, Math.PI * 2);
+    ctx.fillStyle = POWERUP_COLOR[pu.type] + '33';
+    ctx.fill();
+    ctx.strokeStyle = POWERUP_COLOR[pu.type];
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(POWERUP_ICON[pu.type], pu.x, pu.y + 1);
+  }
+
+  // jugadores
+  for (const id in players) {
+    const p = players[id];
+    if (!p.alive) continue;
+
+    const isMe = id === myId;
+    const invisibleToOthers = p.invisibleUntil && now < p.invisibleUntil;
+    if (!isMe && invisibleToOthers) continue; // el enemigo no te puede ver
+
+    const pos = isMe ? localPos : (renderPos[id] || { x: p.x, y: p.y });
+
+    // burbuja de protección (visible para todos)
+    if (p.protectionUntil && now < p.protectionUntil) {
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, PLAYER_R + 8, 0, Math.PI * 2);
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 10; ctx.shadowColor = '#00e5ff';
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, PLAYER_R, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = (isMe && invisibleToOthers) ? 0.5 : 1; // pista visual solo para ti mismo
+    if (isMe) { ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; }
+    ctx.fill();
+    if (isMe) ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // icono de dash
+    if (p.powerUp === 'dash' && p.powerUpExpiresAt > now) {
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚡', pos.x, pos.y - PLAYER_R - 14);
+    }
+
+    // icono de bomba sobre quien la tiene
+    if (id === bombHolderId) {
+      ctx.font = '20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('💣', pos.x, pos.y - PLAYER_R - 16);
+    }
+
+    // nombre
+    ctx.font = '11px monospace';
+    ctx.fillStyle = '#eeeef0';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.name, pos.x, pos.y + PLAYER_R + 14);
+  }
+
+  ctx.restore();
+}
+
+// ==============================================
+// JOYSTICK (táctil + ratón, para que funcione también en escritorio)
+// ==============================================
+const joystickBase = document.getElementById('joystick-base');
+const joystickThumb = document.getElementById('joystick-thumb');
+const MAX_DIST = 36;
+let joystickTouchId = null;
+let joystickMouseActive = false;
+
+function moveJoystick(cx, cy, ox, oy) {
+  const dx = cx - ox, dy = cy - oy;
+  const dist = Math.hypot(dx, dy);
+  const clamp = Math.min(dist, MAX_DIST);
+  const angle = Math.atan2(dy, dx);
+  const nx = Math.cos(angle) * clamp;
+  const ny = Math.sin(angle) * clamp;
+  joystickThumb.style.transform = `translate(calc(-50% + ${nx}px), calc(-50% + ${ny}px))`;
+  moveDir = { x: nx, y: ny };
+}
+function resetJoystick() {
+  joystickThumb.style.transform = 'translate(-50%,-50%)';
+  moveDir = { x: 0, y: 0 };
+}
+
+joystickBase.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  joystickTouchId = t.identifier;
+  const r = joystickBase.getBoundingClientRect();
+  moveJoystick(t.clientX, t.clientY, r.left + r.width/2, r.top + r.height/2);
+}, { passive: false });
+
+joystickBase.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier !== joystickTouchId) continue;
+    const r = joystickBase.getBoundingClientRect();
+    moveJoystick(t.clientX, t.clientY, r.left + r.width/2, r.top + r.height/2);
+  }
+}, { passive: false });
+
+joystickBase.addEventListener('touchend', e => {
+  e.preventDefault();
+  joystickTouchId = null;
+  resetJoystick();
+}, { passive: false });
+
+joystickBase.addEventListener('touchcancel', e => {
+  joystickTouchId = null;
+  resetJoystick();
+}, { passive: false });
+
+joystickBase.addEventListener('mousedown', e => {
+  joystickMouseActive = true;
+  const r = joystickBase.getBoundingClientRect();
+  moveJoystick(e.clientX, e.clientY, r.left + r.width/2, r.top + r.height/2);
+});
+window.addEventListener('mousemove', e => {
+  if (!joystickMouseActive) return;
+  const r = joystickBase.getBoundingClientRect();
+  moveJoystick(e.clientX, e.clientY, r.left + r.width/2, r.top + r.height/2);
+});
+window.addEventListener('mouseup', () => {
+  if (!joystickMouseActive) return;
+  joystickMouseActive = false;
+  resetJoystick();
+});
+
+document.getElementById('controls').addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
+// ==============================================
+// RESULTADO
+// ==============================================
+function showResult(loserId, winners) {
+  const iLost = loserId === myId;
+  const title = document.getElementById('resultTitle');
+  title.textContent = iLost ? 'PERDISTE' : 'GANASTE';
+  title.style.color = iLost ? 'var(--red)' : '#5f5';
+
+  const list = document.getElementById('resultList');
+  list.innerHTML = '';
+  const all = Object.values(players);
+  all.forEach(p => {
+    const row = document.createElement('div');
+    const isLoser = p.id === loserId;
+    row.className = 'result-row ' + (isLoser ? 'loser' : 'winner');
+    row.innerHTML = `<span>${escapeHtml(p.name)}${p.id === myId ? ' (tú)' : ''}</span><span>${isLoser ? '💥 PERDIÓ' : '🏆 GANÓ'}</span>`;
+    list.appendChild(row);
+  });
+
+  showScreen('screen-result');
+}
+
+function onBackToLobby() {
+  if (socket) socket.emit('returnToLobby');
+  showScreen('screen-lobby');
+}
+
+// ==============================================
+// PANTALLAS
+// ==============================================
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+</script>
+</body>
+</html>
