@@ -1,0 +1,3 @@
+[build]
+  base = "potato-server"
+  publish = "potato-server"
